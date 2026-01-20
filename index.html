@@ -6,6 +6,8 @@
   <title>Iniciativas < 5000 UTM - Los Lagos</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
   <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  
   <style>
     :root { --blue-lagos: #004a87; --accent: #0072bc; }
     body { background-color: #f8fafc; font-family: 'Segoe UI', system-ui, sans-serif; padding: 10px; }
@@ -25,6 +27,11 @@
     
     #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; text-align: center; }
     
+    /* Evita que los botones salgan en el PDF */
+    @media print {
+      .no-print { display: none !important; }
+    }
+
     @media (max-width: 768px) { 
       .main-header h2 { font-size: 1.1rem; } 
       .kpi-card h2 { font-size: 1.3rem; } 
@@ -41,10 +48,13 @@
 <div id="dashboard" style="display:none;" class="container-fluid">
   <div class="main-header d-flex justify-content-between align-items-center">
     <div>
-      <h2 class="mb-0">Iniciativas Menores a 5000 UTM - Región de Los Lagos - 2026</h2>
-      <p class="mb-0 opacity-75 small">Región de Los Lagos</p>
+      <h2 class="mb-0">Iniciativas Menores a 5000 UTM - Región de Los Lagos</h2>
+      <p class="mb-0 opacity-75 small">Reporte Generado: 2026</p>
     </div>
-    <button class="btn btn-light btn-sm fw-bold shadow-sm" onclick="location.reload()">🔄 Actualizar</button>
+    <div class="d-flex gap-2 no-print">
+      <button class="btn btn-danger btn-sm fw-bold shadow-sm" onclick="exportarPDF()">📄 PDF</button>
+      <button class="btn btn-light btn-sm fw-bold shadow-sm" onclick="location.reload()">🔄 Actualizar</button>
+    </div>
   </div>
 
   <div class="row g-3 mb-4">
@@ -69,7 +79,7 @@
     </div>
   </div>
 
-  <div class="card p-3 mb-4 border-0 shadow-sm">
+  <div class="card p-3 mb-4 border-0 shadow-sm no-print">
     <div class="row g-2">
       <div class="col-md-3"><select id="selProv" class="form-select form-select-sm" onchange="render()"></select></div>
       <div class="col-md-3"><select id="selComuna" class="form-select form-select-sm" onchange="render()"></select></div>
@@ -112,7 +122,6 @@
 </div>
 
 <script>
-  // Nueva URL de la API proporcionada
   const API_URL = "https://script.google.com/macros/s/AKfycbxzDxk3ALhlmFRMIeViRNMFy48lSwt-gVCUquGgQYEaMUafF9Z95n5uPZtAoN-L9siV/exec"; 
 
   let DB = [];
@@ -124,21 +133,42 @@
     try {
       const response = await fetch(API_URL);
       const data = await response.json();
-      
-      // Filtrar encabezados y filas vacías
       DB = data.filter(r => r[IDX.cod] && r[IDX.cod].toString().trim().toLowerCase() !== "código");
-      
       poblarSelectores();
       document.getElementById('loader').style.display = 'none';
       document.getElementById('dashboard').style.display = 'block';
       render();
     } catch (error) {
-      document.getElementById('loader').innerHTML = `
-        <div class="alert alert-danger m-3">
-          <h5>Error de conexión</h5>
-          <p>No se pudieron obtener los datos. Asegúrate de que la implementación en Apps Script esté como "Cualquier persona".</p>
-        </div>`;
+      document.getElementById('loader').innerHTML = `<div class="alert alert-danger m-3">Error de conexión con la API</div>`;
     }
+  }
+
+  function exportarPDF() {
+    const btn = event.currentTarget;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = "⌛ Generando...";
+    btn.disabled = true;
+
+    // Ocultar elementos que no queremos en el PDF
+    const elementsToHide = document.querySelectorAll('.no-print');
+    elementsToHide.forEach(el => el.style.visibility = 'hidden');
+
+    const element = document.getElementById('dashboard');
+    const fecha = new Date().toLocaleDateString('es-CL').replace(/\//g, '-');
+    
+    const opt = {
+      margin:       [10, 5, 10, 5],
+      filename:     `Reporte_Iniciativas_Lagos_${fecha}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'landscape' }
+    };
+
+    html2pdf().set(opt).from(element).save().then(() => {
+      elementsToHide.forEach(el => el.style.visibility = 'visible');
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    });
   }
 
   function poblarSelectores() {
@@ -180,7 +210,6 @@
       totalMonto += val;
       const est = (r[IDX.est] || "PENDIENTE").toUpperCase();
       const cat = (est === "RECOMENDADO" || est === "OBSERVADO") ? est : 'OTROS';
-      
       stats[cat].m += val;
       stats[cat].c += 1;
       if (est === "RECOMENDADO") recCount++;
@@ -198,33 +227,19 @@
     document.getElementById('kpiCosto').innerText = "$" + totalMonto.toLocaleString('de-DE');
     document.getElementById('kpiRec').innerText = recCount;
     document.getElementById('kpiCount').innerText = rows.length;
-
     dibujarGraficos(stats);
   }
 
   function dibujarGraficos(stats) {
-    // Colores: Verde para Recomendado, Amarillo para Observado, Gris para Otros
     const opt = { 
       pieHole: 0.4, 
       colors: ['#10b981', '#f59e0b', '#94a3b8'], 
       chartArea: {width:'90%', height:'80%'}, 
       legend: {position:'bottom'} 
     };
-    
-    const dtM = google.visualization.arrayToDataTable([
-      ['Estado', 'Monto'], 
-      ['Recomendado', stats['RECOMENDADO'].m], 
-      ['Observado', stats['OBSERVADO'].m], 
-      ['Otros', stats['OTROS'].m]
-    ]);
+    const dtM = google.visualization.arrayToDataTable([['E', 'M'], ['Recomendado', stats['RECOMENDADO'].m], ['Observado', stats['OBSERVADO'].m], ['Otros', stats['OTROS'].m]]);
     new google.visualization.PieChart(document.getElementById('chartMonto')).draw(dtM, opt);
-
-    const dtC = google.visualization.arrayToDataTable([
-      ['Estado', 'Cantidad'], 
-      ['Recomendado', stats['RECOMENDADO'].c], 
-      ['Observado', stats['OBSERVADO'].c], 
-      ['Otros', stats['OTROS'].c]
-    ]);
+    const dtC = google.visualization.arrayToDataTable([['E', 'C'], ['Recomendado', stats['RECOMENDADO'].c], ['Observado', stats['OBSERVADO'].c], ['Otros', stats['OTROS'].c]]);
     new google.visualization.PieChart(document.getElementById('chartCantidad')).draw(dtC, opt);
   }
 
@@ -233,4 +248,3 @@
 </script>
 </body>
 </html>
-
