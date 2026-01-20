@@ -27,7 +27,6 @@
     
     #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; text-align: center; }
     
-    /* Evita que los botones salgan en el PDF */
     @media print {
       .no-print { display: none !important; }
     }
@@ -149,7 +148,6 @@
     btn.innerHTML = "⌛ Generando...";
     btn.disabled = true;
 
-    // Ocultar elementos que no queremos en el PDF
     const elementsToHide = document.querySelectorAll('.no-print');
     elementsToHide.forEach(el => el.style.visibility = 'hidden');
 
@@ -182,69 +180,4 @@
       list.forEach(v => el.innerHTML += `<option value="${v}">${v}</option>`);
     };
 
-    fill('selProv', p, 'Provincias', 'Todas las');
-    fill('selComuna', c, 'Comunas', 'Todas las');
-    fill('selSector', s, 'Sectores', 'Todos los');
-  }
-
-  function render() {
-    const fP = document.getElementById('selProv').value;
-    const fC = document.getElementById('selComuna').value;
-    const fS = document.getElementById('selSector').value;
-    const search = document.getElementById('busqueda').value.toLowerCase();
-
-    const rows = DB.filter(r => {
-      return (fP === "ALL" || r[IDX.pro] === fP) &&
-             (fC === "ALL" || r[IDX.com] === fC) &&
-             (fS === "ALL" || r[IDX.sec] === fS) &&
-             (r[IDX.nom].toString().toLowerCase().includes(search));
-    });
-
-    let totalMonto = 0;
-    let recCount = 0;
-    let tableHtml = "";
-    let stats = { 'RECOMENDADO': {m:0, c:0}, 'OBSERVADO': {m:0, c:0}, 'OTROS': {m:0, c:0} };
-
-    rows.forEach(r => {
-      const val = parseInt(r[IDX.mon].toString().replace(/[^0-9]/g, '')) || 0;
-      totalMonto += val;
-      const est = (r[IDX.est] || "PENDIENTE").toUpperCase();
-      const cat = (est === "RECOMENDADO" || est === "OBSERVADO") ? est : 'OTROS';
-      stats[cat].m += val;
-      stats[cat].c += 1;
-      if (est === "RECOMENDADO") recCount++;
-
-      tableHtml += `<tr>
-        <td><small class="text-muted">${r[IDX.cod]}</small></td>
-        <td style="max-width:200px"><strong>${r[IDX.nom]}</strong></td>
-        <td>${r[IDX.com]}</td>
-        <td class="text-end fw-bold text-primary">$${val.toLocaleString('de-DE')}</td>
-        <td class="text-center"><span class="badge ${est === 'RECOMENDADO' ? 'bg-success' : 'bg-warning text-dark'}">${est}</span></td>
-      </tr>`;
-    });
-
-    document.getElementById('tableBody').innerHTML = tableHtml;
-    document.getElementById('kpiCosto').innerText = "$" + totalMonto.toLocaleString('de-DE');
-    document.getElementById('kpiRec').innerText = recCount;
-    document.getElementById('kpiCount').innerText = rows.length;
-    dibujarGraficos(stats);
-  }
-
-  function dibujarGraficos(stats) {
-    const opt = { 
-      pieHole: 0.4, 
-      colors: ['#10b981', '#f59e0b', '#94a3b8'], 
-      chartArea: {width:'90%', height:'80%'}, 
-      legend: {position:'bottom'} 
-    };
-    const dtM = google.visualization.arrayToDataTable([['E', 'M'], ['Recomendado', stats['RECOMENDADO'].m], ['Observado', stats['OBSERVADO'].m], ['Otros', stats['OTROS'].m]]);
-    new google.visualization.PieChart(document.getElementById('chartMonto')).draw(dtM, opt);
-    const dtC = google.visualization.arrayToDataTable([['E', 'C'], ['Recomendado', stats['RECOMENDADO'].c], ['Observado', stats['OBSERVADO'].c], ['Otros', stats['OTROS'].c]]);
-    new google.visualization.PieChart(document.getElementById('chartCantidad')).draw(dtC, opt);
-  }
-
-  window.addEventListener('resize', () => { if(DB.length > 0) render(); });
-  google.charts.setOnLoadCallback(init);
-</script>
-</body>
-</html>
+    fill('
