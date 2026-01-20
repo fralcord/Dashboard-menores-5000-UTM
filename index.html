@@ -12,7 +12,7 @@
     
     .main-header { 
       background: linear-gradient(135deg, var(--blue-lagos) 0%, var(--accent) 100%); 
-      color: white; border-radius: 12px; padding: 25px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+      color: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);
     }
     
     .kpi-card { 
@@ -23,7 +23,7 @@
     .table-container { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .disclaimer { font-size: 0.7rem; color: #64748b; font-style: italic; }
     
-    #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; padding: 20px; text-align: center; }
+    #loader { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 80vh; text-align: center; }
     
     @media (max-width: 768px) { 
       .main-header h2 { font-size: 1.1rem; } 
@@ -34,8 +34,8 @@
 <body>
 
 <div id="loader">
-  <div id="spinner" class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
-  <p id="loaderText" class="mt-3 fw-bold text-secondary">Sincronizando con Banco de Proyectos...</p>
+  <div class="spinner-border text-primary" style="width: 3rem; height: 3rem;"></div>
+  <p class="mt-3 fw-bold text-secondary">Cargando Iniciativas Regionales...</p>
 </div>
 
 <div id="dashboard" style="display:none;" class="container-fluid">
@@ -83,12 +83,11 @@
       <div class="kpi-card text-center">
         <h6 class="fw-bold text-secondary border-bottom pb-2">Costo Total por Estado</h6>
         <div id="chartMonto" style="height: 280px;"></div>
-        <span class="disclaimer">*Valores en miles de pesos</span>
       </div>
     </div>
     <div class="col-md-6">
       <div class="kpi-card text-center">
-        <h6 class="fw-bold text-secondary border-bottom pb-2">Cantidad de Proyectos</h6>
+        <h6 class="fw-bold text-secondary border-bottom pb-2">Cantidad por Estado</h6>
         <div id="chartCantidad" style="height: 280px;"></div>
       </div>
     </div>
@@ -97,4 +96,140 @@
   <div class="table-container mb-5">
     <div class="table-responsive">
       <table class="table table-hover table-sm align-middle" style="font-size: 0.85rem;">
-        <thead class="table-dark
+        <thead class="table-dark">
+          <tr>
+            <th>Cód.</th>
+            <th>Proyecto</th>
+            <th>Comuna</th>
+            <th class="text-end">Monto (M$)</th>
+            <th class="text-center">Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Nueva URL de la API proporcionada
+  const API_URL = "https://script.google.com/macros/s/AKfycbxzDxk3ALhlmFRMIeViRNMFy48lSwt-gVCUquGgQYEaMUafF9Z95n5uPZtAoN-L9siV/exec"; 
+
+  let DB = [];
+  const IDX = { cod: 1, nom: 3, com: 4, pro: 5, mon: 7, sec: 10, est: 44 };
+
+  google.charts.load('current', {'packages':['corechart']});
+
+  async function init() {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+      
+      // Filtrar encabezados y filas vacías
+      DB = data.filter(r => r[IDX.cod] && r[IDX.cod].toString().trim().toLowerCase() !== "código");
+      
+      poblarSelectores();
+      document.getElementById('loader').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+      render();
+    } catch (error) {
+      document.getElementById('loader').innerHTML = `
+        <div class="alert alert-danger m-3">
+          <h5>Error de conexión</h5>
+          <p>No se pudieron obtener los datos. Asegúrate de que la implementación en Apps Script esté como "Cualquier persona".</p>
+        </div>`;
+    }
+  }
+
+  function poblarSelectores() {
+    const p = [...new Set(DB.map(r => r[IDX.pro]))].filter(x => x).sort();
+    const c = [...new Set(DB.map(r => r[IDX.com]))].filter(x => x).sort();
+    const s = [...new Set(DB.map(r => r[IDX.sec]))].filter(x => x).sort();
+
+    const fill = (id, list, label, prefix) => {
+      let el = document.getElementById(id);
+      el.innerHTML = `<option value="ALL">${prefix} ${label}</option>`;
+      list.forEach(v => el.innerHTML += `<option value="${v}">${v}</option>`);
+    };
+
+    fill('selProv', p, 'Provincias', 'Todas las');
+    fill('selComuna', c, 'Comunas', 'Todas las');
+    fill('selSector', s, 'Sectores', 'Todos los');
+  }
+
+  function render() {
+    const fP = document.getElementById('selProv').value;
+    const fC = document.getElementById('selComuna').value;
+    const fS = document.getElementById('selSector').value;
+    const search = document.getElementById('busqueda').value.toLowerCase();
+
+    const rows = DB.filter(r => {
+      return (fP === "ALL" || r[IDX.pro] === fP) &&
+             (fC === "ALL" || r[IDX.com] === fC) &&
+             (fS === "ALL" || r[IDX.sec] === fS) &&
+             (r[IDX.nom].toString().toLowerCase().includes(search));
+    });
+
+    let totalMonto = 0;
+    let recCount = 0;
+    let tableHtml = "";
+    let stats = { 'RECOMENDADO': {m:0, c:0}, 'OBSERVADO': {m:0, c:0}, 'OTROS': {m:0, c:0} };
+
+    rows.forEach(r => {
+      const val = parseInt(r[IDX.mon].toString().replace(/[^0-9]/g, '')) || 0;
+      totalMonto += val;
+      const est = (r[IDX.est] || "PENDIENTE").toUpperCase();
+      const cat = (est === "RECOMENDADO" || est === "OBSERVADO") ? est : 'OTROS';
+      
+      stats[cat].m += val;
+      stats[cat].c += 1;
+      if (est === "RECOMENDADO") recCount++;
+
+      tableHtml += `<tr>
+        <td><small class="text-muted">${r[IDX.cod]}</small></td>
+        <td style="max-width:200px"><strong>${r[IDX.nom]}</strong></td>
+        <td>${r[IDX.com]}</td>
+        <td class="text-end fw-bold text-primary">$${val.toLocaleString('de-DE')}</td>
+        <td class="text-center"><span class="badge ${est === 'RECOMENDADO' ? 'bg-success' : 'bg-warning text-dark'}">${est}</span></td>
+      </tr>`;
+    });
+
+    document.getElementById('tableBody').innerHTML = tableHtml;
+    document.getElementById('kpiCosto').innerText = "$" + totalMonto.toLocaleString('de-DE');
+    document.getElementById('kpiRec').innerText = recCount;
+    document.getElementById('kpiCount').innerText = rows.length;
+
+    dibujarGraficos(stats);
+  }
+
+  function dibujarGraficos(stats) {
+    // Colores: Verde para Recomendado, Amarillo para Observado, Gris para Otros
+    const opt = { 
+      pieHole: 0.4, 
+      colors: ['#10b981', '#f59e0b', '#94a3b8'], 
+      chartArea: {width:'90%', height:'80%'}, 
+      legend: {position:'bottom'} 
+    };
+    
+    const dtM = google.visualization.arrayToDataTable([
+      ['Estado', 'Monto'], 
+      ['Recomendado', stats['RECOMENDADO'].m], 
+      ['Observado', stats['OBSERVADO'].m], 
+      ['Otros', stats['OTROS'].m]
+    ]);
+    new google.visualization.PieChart(document.getElementById('chartMonto')).draw(dtM, opt);
+
+    const dtC = google.visualization.arrayToDataTable([
+      ['Estado', 'Cantidad'], 
+      ['Recomendado', stats['RECOMENDADO'].c], 
+      ['Observado', stats['OBSERVADO'].c], 
+      ['Otros', stats['OTROS'].c]
+    ]);
+    new google.visualization.PieChart(document.getElementById('chartCantidad')).draw(dtC, opt);
+  }
+
+  window.addEventListener('resize', () => { if(DB.length > 0) render(); });
+  google.charts.setOnLoadCallback(init);
+</script>
+</body>
+</html>
