@@ -31,9 +31,8 @@
     .table-container { background: white; border-radius: 12px; padding: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
     .disclaimer { font-size: 0.75rem; color: #64748b; font-style: italic; }
     .disclaimer-white { font-size: 0.75rem; color: rgba(255,255,255,0.85); font-style: italic; }
-    .cant-proyectos { font-size: 1.8rem; font-weight: bold; margin-top: 5px; } /* Tamaño aumentado */
+    .cant-proyectos { font-size: 1.8rem; font-weight: bold; margin-top: 5px; }
 
-    /* CONTROLES PARA PDF (Evita cortes abruptos) */
     @media print {
       .no-print { display: none !important; }
       .kpi-card, .status-card, tr { 
@@ -43,7 +42,6 @@
       .main-header { margin-bottom: 40px; }
     }
 
-    /* Ajustes para Móvil (Evita desbordamientos laterales) */
     @media (max-width: 768px) {
       .status-card { margin-bottom: 15px; }
       .main-header h2 { font-size: 1.2rem; }
@@ -101,7 +99,7 @@
       <div class="col-md-2"><select id="selComuna" class="form-select form-select-sm" onchange="render()"></select></div>
       <div class="col-md-2"><select id="selSector" class="form-select form-select-sm" onchange="render()"></select></div>
       <div class="col-md-2"><select id="selEstado" class="form-select form-select-sm" onchange="render()"></select></div>
-      <div class="col-md-4"><input type="text" id="busqueda" class="form-control form-control-sm" placeholder="Buscar proyecto..." onkeyup="render()"></div>
+      <div class="col-md-4"><input type="text" id="busqueda" class="form-control form-control-sm" placeholder="Buscar por nombre o código..." onkeyup="render()"></div>
     </div>
   </div>
 
@@ -227,11 +225,15 @@
 
     const rows = DB.filter(r => {
       const est = r[IDX.est].toString().trim().toUpperCase();
+      // Búsqueda combinada: Nombre O Código
+      const matchSearch = r[IDX.nom].toString().toLowerCase().includes(search) || 
+                          r[IDX.cod].toString().toLowerCase().includes(search);
+
       return (fP === "ALL" || r[IDX.pro] === fP) &&
              (fC === "ALL" || r[IDX.com] === fC) &&
              (fS === "ALL" || r[IDX.sec] === fS) &&
              (fE === "ALL" || est === fE) &&
-             (r[IDX.nom].toString().toLowerCase().includes(search));
+             matchSearch;
     });
 
     let totalMonto = 0;
